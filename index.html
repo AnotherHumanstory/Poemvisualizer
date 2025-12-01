@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Poem Voice Visualizer 🌈</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Arial', sans-serif;
+  background: linear-gradient(160deg, #fbecec, #f0f4f8);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  min-height:100vh;
+  padding-top:40px;
+}
+header {
+  text-align:center;
+  margin-bottom:20px;
+}
+header h1 { font-size:2rem; color:#d45d9c; margin-bottom:5px; }
+header small { font-size:0.9rem; color:#a37ea8; display:block; }
+button {
+  margin-top:10px;
+  padding:10px 25px;
+  font-size:1rem;
+  border:none;
+  border-radius:30px;
+  cursor:pointer;
+  color:white;
+  box-shadow:0 4px 15px rgba(0,0,0,0.15);
+  transition: all 0.2s ease;
+}
+#toggleBtn { background:#d45d9c; }
+#toggleBtn:hover { background:#c13b8d; transform: translateY(-2px);}
+#screenshotBtn { background:#6fa8dc; margin-left:10px;}
+#screenshotBtn:hover { background:#5b90c5; transform: translateY(-2px);}
+#resetBtn { background:#ff8c42; margin-left:10px;}
+#resetBtn:hover { background:#e07b32; transform: translateY(-2px);}
+canvas {
+  background: rgba(255,255,255,0.05);
+  border-radius:20px;
+  display:block;
+  box-shadow:0 10px 30px rgba(0,0,0,0.12);
+  margin-top:20px;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Poem Voice Visualizer 🌈</h1>
+<small>Read aloud — see colorful waves and little sound bursts!</small><br>
+<button id="toggleBtn">Start Visualization</button>
+<button id="screenshotBtn">Save Screenshot</button>
+<button id="resetBtn">Reset</button>
+</header>
+
+<canvas id="waveCanvas" width="900" height="300"></canvas>
+
+<script>
+const toggleBtn = document.getElementById("toggleBtn");
+const screenshotBtn = document.getElementById("screenshotBtn");
+const resetBtn = document.getElementById("resetBtn");
+const canvas = document.getElementById("waveCanvas");
+const ctx = canvas.getContext("2d");
+
+let audioCtx, analyser, mic, dataArray;
+let drawX = 0;
+const maxX = canvas.width;
+
+// Explosion particles array
+let particles = [];
+
+// Initialize microphone
+toggleBtn.addEventListener("click", async () => {
+    toggleBtn.disabled = true;
+    toggleBtn.innerText = "Initializing…";
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        mic = audioCtx.createMediaStreamSource(stream);
+        mic.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        toggleBtn.style.display = "none";
+        drawVisualizer();
+    } catch(e) {
+        alert("Microphone access denied. Please allow it and reload.");
+        toggleBtn.disabled = false;
+        toggleBtn.innerText = "Start Visualization";
+    }
+});
+
+function drawVisualizer(){
+    requestAnimationFrame(drawVisualizer);
+    analyser.getByteTimeDomainData(dataArray);
+
+    // Draw persistent wave
+    drawWave();
+
+    // Generate explosions
+    generateExplosions();
+
+    // Draw explosion particles
+    drawParticles();
+
+    drawX += 2;
+    if(drawX >= maxX) drawX = 0; // loop back
+}
+
+// Wave shape with persistent rainbow color
+function drawWave(){
+    const stripWidth = 2;
+    for(let i=0;i<dataArray.length;i+=4){
+        const v = dataArray[i]/128.0;
+        const y = v * canvas.height/2;
+        const hue = Math.floor(360 * v);
+        ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+        ctx.fillRect(drawX, y, stripWidth, 2);
+    }
+}
+
+// Generate explosion particles
+function generateExplosions(){
+    const avgAmplitude = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
+    if(avgAmplitude > 130){ // threshold to trigger explosions
+        const count = Math.floor((avgAmplitude-128)/2);
+        for(let i=0;i<count;i++){
+            particles.push({
+                x: Math.random()*canvas.width,
+                y: Math.random()*canvas.height,
+                radius: Math.random()*4+2,
+                hue: Math.random()*360
+            });
+        }
+    }
+}
+
+// Draw particles
+function drawParticles(){
+    particles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+        ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, 0.9)`;
+        ctx.fill();
+    });
+}
+
+// Screenshot
+screenshotBtn.addEventListener("click", () => {
+    const image = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.href = image;
+    link.download = "voice_wave_explosions.png";
+    link.click();
+});
+
+// Reset button
+resetBtn.addEventListener("click", () => {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawX = 0;
+    particles = [];
+});
+</script>
+
+</body>
+</html>
